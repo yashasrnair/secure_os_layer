@@ -4,6 +4,7 @@ use actix_web::{
 };
 use futures_util::future::{LocalBoxFuture, Ready, ready};
 use sqlx::SqlitePool;
+use std::sync::Arc;
 
 /// A middleware that validates the X-App-ID header against the registered apps in the database.
 pub struct PermissionMiddleware;
@@ -13,6 +14,7 @@ where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     B: 'static,
 {
+    // Specify the associated type Response for the transformed service.
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
     type InitError = ();
@@ -20,12 +22,15 @@ where
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(PermissionMiddlewareMiddleware { service }))
+        // Wrap the service in an Arc for cloneability.
+        ready(Ok(PermissionMiddlewareMiddleware {
+            service: Arc::new(service),
+        }))
     }
 }
 
 pub struct PermissionMiddlewareMiddleware<S> {
-    service: S,
+    service: Arc<S>,
 }
 
 impl<S, B> Service<ServiceRequest> for PermissionMiddlewareMiddleware<S>
@@ -35,32 +40,48 @@ where
 {
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
+    // Our future must be 'static.
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // Extract the X-App-ID header.
-        let app_id = req
+        // --- Do header extraction outside the async block ---
+        let app_id_opt = req
             .headers()
             .get("X-App-ID")
             .and_then(|val| val.to_str().ok())
             .map(|s| s.trim().to_string());
 
-        // Get the connection pool from the app data.
-        let pool = req.app_data::<actix_web::web::Data<SqlitePool>>().cloned();
+        if let Some(ref app_id) = app_id_opt {
+            if app_id.is_empty() {
+                let (req, _payload) = req.into_parts();
+                let res = HttpResponse::Unauthorized().body("Missing or invalid X-App-ID");
+                return Box::pin(async move {
+                    Ok(ServiceResponse::new(req, res.map_into_right_body()))
+                });
+            }
+        } else {
+            let (req, _payload) = req.into_parts();
+            let res = HttpResponse::Unauthorized().body("Missing or invalid X-App-ID");
+            return Box::pin(async move {
+                Ok(ServiceResponse::new(req, res.map_into_right_body()))
+            });
+        }
 
+        // Now that we have a valid, owned app_id, unwrap it.
+        let app_id = app_id_opt.unwrap();
+
+        // Clone the pool from app data.
+        let pool = req
+            .app_data::<actix_web::web::Data<SqlitePool>>()
+            .cloned();
+
+        // Clone the inner service from the Arc.
+        let svc = self.service.clone();
+
+        // Now we can move everything into the async block.
         Box::pin(async move {
-            // Check that we have a non-empty app_id.
-            let app_id = match app_id {
-                Some(a) if !a.is_empty() => a,
-                _ => {
-                    let (req, _payload) = req.into_parts();
-                    let res = HttpResponse::Unauthorized().body("Missing or invalid X-App-ID");
-                    return Ok(ServiceResponse::new(req, res.map_into_right_body()));
-                }
-            };
-
             // Validate the app_id using the database.
             if let Some(pool) = pool {
                 let query = "SELECT COUNT(*) as count FROM registered_apps WHERE app_id = ?";
@@ -80,14 +101,13 @@ where
                     }
                 }
             } else {
-                // If no pool is provided, return an error.
                 let (req, _payload) = req.into_parts();
                 let res = HttpResponse::InternalServerError().body("Missing DB pool");
                 return Ok(ServiceResponse::new(req, res.map_into_right_body()));
             }
 
-            // Continue to the next service/middleware.
-            let res = self.service.call(req).await?;
+            // All checks passed; now call the cloned inner service.
+            let res = svc.call(req).await?;
             Ok(res.map_into_left_body())
         })
     }

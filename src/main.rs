@@ -21,7 +21,7 @@ struct UserData {
     value: String,
 }
 
-// Database model for user data (remains unchanged).
+// Database model for user data.
 #[derive(sqlx::FromRow)]
 struct DBUserData {
     id: String,
