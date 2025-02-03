@@ -1,0 +1,15 @@
+{
+  "name": "secure-os-layer-sdk",
+  "version": "1.0.0",
+  "description": "A JavaScript SDK for interacting with the Secure OS Layer API",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node example.js"
+  },
+  "author": "Yashas R Nair",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.1"
+  }
+}

@@ -29,6 +29,22 @@ struct DBUserData {
     value: String,
 }
 
+// Database model for a registered app.
+#[derive(sqlx::FromRow, Serialize)]
+struct RegisteredApp {
+    app_id: String,
+    app_name: String,
+    allowed_permissions: Option<String>,
+}
+
+// New database model for an installed app.
+#[derive(sqlx::FromRow, Serialize)]
+struct InstalledApp {
+    install_id: i64,
+    app_id: String,
+    install_date: String,
+}
+
 async fn status() -> impl Responder {
     HttpResponse::Ok().json(StatusResponse {
         status: "ok".into(),
@@ -90,6 +106,61 @@ async fn get_data(
     }
 }
 
+// New endpoint: List registered apps.
+async fn get_apps(pool: web::Data<sqlx::SqlitePool>) -> impl Responder {
+    let query = "SELECT app_id, app_name, allowed_permissions FROM registered_apps";
+    match sqlx::query_as::<_, RegisteredApp>(query)
+        .fetch_all(pool.get_ref())
+        .await
+    {
+        Ok(apps) => HttpResponse::Ok().json(apps),
+        Err(e) => {
+            eprintln!("Error fetching apps: {:?}", e);
+            HttpResponse::InternalServerError().body("Error fetching apps")
+        }
+    }
+}
+
+// New endpoint: Install an app.
+#[derive(Deserialize)]
+struct InstallRequest {
+    app_id: String,
+}
+
+async fn install_app(
+    data: web::Json<InstallRequest>,
+    pool: web::Data<sqlx::SqlitePool>,
+) -> impl Responder {
+    // Insert an installation record.
+    let query = "INSERT INTO installed_apps (app_id) VALUES (?)";
+    match sqlx::query(query)
+        .bind(&data.app_id)
+        .execute(pool.get_ref())
+        .await
+    {
+        Ok(_) => HttpResponse::Ok().json("App installed"),
+        Err(e) => {
+            eprintln!("Error installing app: {:?}", e);
+            HttpResponse::InternalServerError().body("Failed to install app")
+        }
+    }
+}
+
+// Optional: Endpoint to list installed apps.
+async fn get_installed_apps(pool: web::Data<sqlx::SqlitePool>) -> impl Responder {
+    let query = "SELECT install_id, app_id, install_date FROM installed_apps";
+    match sqlx::query_as::<_, InstalledApp>(query)
+        .fetch_all(pool.get_ref())
+        .await
+    {
+        Ok(installed) => HttpResponse::Ok().json(installed),
+        Err(e) => {
+            eprintln!("Error fetching installed apps: {:?}", e);
+            HttpResponse::InternalServerError().body("Error fetching installed apps")
+        }
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Create the SQLite connection pool.
@@ -119,6 +190,9 @@ async fn main() -> std::io::Result<()> {
             .route("/status", web::get().to(status))
             .route("/data", web::post().to(add_data))
             .route("/data/{id}", web::get().to(get_data))
+            .route("/apps", web::get().to(get_apps))
+            .route("/install", web::post().to(install_app))
+            .route("/installed", web::get().to(get_installed_apps))
     })
     .bind("127.0.0.1:8080")?
     .run()

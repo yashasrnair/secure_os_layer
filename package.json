@@ -1,0 +1,11 @@
+{
+  "name": "secure_os_layer",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node example.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.1"
+  }
+}
