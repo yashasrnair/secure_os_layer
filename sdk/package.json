@@ -7,8 +7,25 @@
   "scripts": {
     "test": "node example.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yashasrnair/secure_os_layer.git"
+  },
+  "keywords": [
+    "secure",
+    "os",
+    "layer",
+    "sdk",
+    "api",
+    "ai",
+    "app store"
+  ],
   "author": "Yashas R Nair",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yashasrnair/secure_os_layer/issues"
+  },
+  "homepage": "https://github.com/yashasrnair/secure_os_layer#readme",
   "dependencies": {
     "node-fetch": "^3.3.1"
   }
