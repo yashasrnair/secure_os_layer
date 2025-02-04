@@ -212,4 +212,4 @@ Email: <support@cybernix.in>
 
 GitHub: @yashasrnair
 
-Website: <https://www.cybernix.in>
+Website: <https://cybernix.in>
