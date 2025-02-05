@@ -67,7 +67,7 @@ Welcome to **Secure OS Layer** – a robust, privacy-centric operating system la
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/yourusername/secure_os_layer.git
+   git clone https://github.com/yashasrnair/secure_os_layer.git
    cd secure_os_layer
 
 2. **Initialize the Database:**
